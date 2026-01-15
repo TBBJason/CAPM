@@ -1,6 +1,5 @@
-pip install yfinance
-pip install pandas
-pip install numpy
-pip install matplotlib
-pip install scipy
-
+yfinance    
+pandas 
+numpy
+scipy
+matplotlib
