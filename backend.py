@@ -6,6 +6,8 @@ import yfinance as yf
 from numpy.linalg import inv
 from portfolio import tangency_weights_constrained, tangency_weights
 from main import download_stock_data
+from backtest import backtest
+
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"]}})
 
@@ -85,22 +87,11 @@ def optimize():
         print(f"  Sharpe Ratio: {sharpe:.4f}")
 
         # Backtest (1 year)
-        backtest_end = pd.Timestamp.now()
-        backtest_start = backtest_end - pd.DateOffset(years=1)
-        
-        print(f"\nRunning 1-year backtest ({backtest_start.date()} to {backtest_end.date()})...")
-        backtest_prices = download_stock_data(tickers, start=backtest_start, end=backtest_end)
-        backtest_returns = ((backtest_prices / backtest_prices.shift(1)) - 1).dropna()
-
-        # Portfolio daily returns
-        daily_rets = (backtest_returns @ weights).values
-        portfolio_value = np.cumprod(1 + daily_rets)
-        portfolio_value = np.concatenate([[1.0], portfolio_value])
+        portfolio_value = backtest(tickers, weights)
 
         final_value = portfolio_value[-1]
         total_return = (final_value - 1) * 100
-        print(f"  Backtest return: {total_return:.2f}%")
-        print(f"{'='*60}\n")
+
 
         return jsonify({
             'weights': {ticker: float(w) for ticker, w in zip(tickers, weights)},
