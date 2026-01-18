@@ -1,7 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-
+from portfolio import tangency_weights, tangency_weights_constrained, efficient_frontier
 
 
 # downloading and loading data

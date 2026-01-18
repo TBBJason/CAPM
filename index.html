@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Optimizer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --color-bg-base: #0f172a;
+            --color-surface: #1e293b;
+            --color-text: #f1f5f9;
+            --color-accent: #38bdf8;
+            --color-success: #10b981;
+            --color-error: #ef4444;
+            --color-warning: #f59e0b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--color-bg-base);
+            color: var(--color-text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 2px solid var(--color-surface);
+            padding-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: var(--color-accent);
+        }
+
+        .subtitle {
+            color: #cbd5e1;
+            font-size: 1.1rem;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background-color: var(--color-surface);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: var(--color-accent);
+            border-bottom: 2px solid var(--color-accent);
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #cbd5e1;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            background-color: #0f172a;
+            color: var(--color-text);
+            font-size: 1rem;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--color-accent);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+        }
+
+        .input-hint {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background-color: var(--color-accent);
+            color: var(--color-bg-base);
+        }
+
+        .btn-primary:hover {
+            background-color: #0284c7;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+        }
+
+        .btn-secondary {
+            background-color: #334155;
+            color: var(--color-text);
+        }
+
+        .btn-secondary:hover {
+            background-color: #475569;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .main-grid, .results-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .metric {
+            background-color: #0f172a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--color-accent);
+        }
+
+        .metric-label {
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--color-accent);
+            margin-top: 5px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: var(--color-accent);
+        }
+
+        .spinner {
+            border: 3px solid #334155;
+            border-top: 3px solid var(--color-accent);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background-color: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--color-error);
+            color: #fca5a5;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .success {
+            background-color: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--color-success);
+            color: #86efac;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        thead {
+            background-color: #0f172a;
+        }
+
+        th {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 2px solid var(--color-accent);
+            color: var(--color-accent);
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #334155;
+        }
+
+        tr:hover {
+            background-color: #0f172a;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .tag {
+            display: inline-block;
+            background-color: rgba(56, 189, 248, 0.2);
+            color: var(--color-accent);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        .tag-close {
+            cursor: pointer;
+            margin-left: 6px;
+            font-weight: bold;
+        }
+
+        .tags-container {
+            margin-top: 10px;
+            min-height: 32px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Portfolio Optimizer</h1>
+            <p class="subtitle">Maximize Sharpe Ratio with Modern Portfolio Theory</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- Input Section -->
+            <div class="card">
+                <h2>Portfolio Setup</h2>
+                <div class="error" id="errorMsg"></div>
+                <div class="success" id="successMsg"></div>
+
+                <div class="form-group">
+                    <label for="stockInput">Add Stock Ticker</label>
+                    <input 
+                        type="text" 
+                        id="stockInput" 
+                        placeholder="e.g., AAPL"
+                        autocomplete="off"
+                    >
+                    <p class="input-hint">Enter ticker symbols (uppercase)</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="riskFreeRate">Risk-Free Rate (annual %)</label>
+                    <input 
+                        type="number" 
+                        id="riskFreeRate" 
+                        value="4.0"
+                        step="0.1"
+                        min="0"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="lookback">Historical Period (years)</label>
+                    <select id="lookback">
+                        <option value="1">1 Year</option>
+                        <option value="2">2 Years</option>
+                        <option value="3" selected>3 Years</option>
+                        <option value="5">5 Years</option>
+                    </select>
+                </div>
+
+                <div class="tags-container" id="tagsContainer"></div>
+
+                <div class="button-group">
+                    <button class="btn-primary" onclick="addStock()">+ Add Stock</button>
+                    <button class="btn-secondary" onclick="clearStocks()">Clear All</button>
+                </div>
+
+                <button class="btn-primary" style="width: 100%; margin-top: 15px;" onclick="optimizePortfolio()" id="optimizeBtn">
+                    🚀 Optimize Portfolio
+                </button>
+            </div>
+
+            <!-- Results Section -->
+            <div class="card">
+                <h2>Portfolio Metrics</h2>
+                <div id="metricsContainer">
+                    <p style="color: #94a3b8; text-align: center; padding: 20px;">
+                        Add stocks and click "Optimize Portfolio" to see results
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Allocations Table -->
+        <div class="card full-width">
+            <h2>Optimal Allocations</h2>
+            <div id="allocationsContainer">
+                <p style="color: #94a3b8; text-align: center; padding: 20px;">
+                    Results will appear here
+                </p>
+            </div>
+        </div>
+
+        <!-- Backtest Chart -->
+        <div class="card full-width">
+            <h2>Backtest Results (1 Year)</h2>
+            <div id="backtestContainer">
+                <p style="color: #94a3b8; text-align: center; padding: 20px;">
+                    Run optimization to see backtest
+                </p>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Fetching market data and optimizing...</p>
+        </div>
+    </div>
+
+    <script>
+        const stocks = [];
+        let chart = null;
+        const API_URL = 'http://localhost:5000/api/optimize';
+
+        function addStock() {
+            const input = document.getElementById('stockInput');
+            const ticker = input.value.toUpperCase().trim();
+
+            if (!ticker) {
+                showError('Please enter a ticker symbol');
+                return;
+            }
+
+            if (stocks.includes(ticker)) {
+                showError(`${ticker} is already added`);
+                return;
+            }
+
+            if (stocks.length >= 10) {
+                showError('Maximum 10 stocks allowed');
+                return;
+            }
+
+            stocks.push(ticker);
+            input.value = '';
+            renderTags();
+            clearError();
+        }
+
+        function removeStock(ticker) {
+            const idx = stocks.indexOf(ticker);
+            if (idx > -1) stocks.splice(idx, 1);
+            renderTags();
+        }
+
+        function renderTags() {
+            const container = document.getElementById('tagsContainer');
+            container.innerHTML = stocks.map(ticker => 
+                `<span class="tag">${ticker}<span class="tag-close" onclick="removeStock('${ticker}')">×</span></span>`
+            ).join('');
+        }
+
+        function clearStocks() {
+            stocks.length = 0;
+            renderTags();
+            clearError();
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('errorMsg');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function clearError() {
+            document.getElementById('errorMsg').style.display = 'none';
+        }
+
+        function showSuccess(msg) {
+            const el = document.getElementById('successMsg');
+            el.textContent = msg;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 3000);
+        }
+
+        async function optimizePortfolio() {
+            if (stocks.length < 2) {
+                showError('Please add at least 2 stocks');
+                return;
+            }
+
+            const rf = parseFloat(document.getElementById('riskFreeRate').value) / 100;
+            const lookback = parseInt(document.getElementById('lookback').value);
+            const btn = document.getElementById('optimizeBtn');
+
+            btn.disabled = true;
+            document.getElementById('loading').style.display = 'block';
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tickers: stocks,
+                        rf: rf,
+                        lookback_years: lookback,
+                        allow_shorting: false
+                    })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || `HTTP Error: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                displayMetricsFromResult(result);
+                displayAllocations(result.weights);
+                displayBacktest(result.backtest_values);
+
+                showSuccess('Portfolio optimized successfully!');
+            } catch (err) {
+                showError('Error: ' + err.message + '. Make sure backend.py is running on port 5000');
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function displayMetricsFromResult(result) {
+            const html = `
+                <div class="metric">
+                    <div class="metric-label">Portfolio Return</div>
+                    <div class="metric-value">${(result.expected_return * 100).toFixed(2)}%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Portfolio Volatility</div>
+                    <div class="metric-value">${(result.volatility * 100).toFixed(2)}%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Sharpe Ratio</div>
+                    <div class="metric-value">${result.sharpe.toFixed(3)}</div>
+                </div>
+            `;
+            document.getElementById('metricsContainer').innerHTML = html;
+        }
+
+        function displayAllocations(weights) {
+            const tickers = Object.keys(weights).sort((a, b) => weights[b] - weights[a]);
+            const rows = tickers.map(t => `
+                <tr>
+                    <td><strong>${t}</strong></td>
+                    <td>${(weights[t] * 100).toFixed(2)}%</td>
+                </tr>
+            `).join('');
+
+            const html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Stock</th>
+                            <th>Allocation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            `;
+            document.getElementById('allocationsContainer').innerHTML = html;
+        }
+
+        function displayBacktest(portfolioValue) {
+            const ctx = document.createElement('canvas');
+            document.getElementById('backtestContainer').innerHTML = '';
+            document.getElementById('backtestContainer').appendChild(ctx);
+
+            if (chart) chart.destroy();
+
+            const labels = portfolioValue.map((_, i) => i);
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Portfolio Value',
+                        data: portfolioValue,
+                        borderColor: '#38bdf8',
+                        backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#cbd5e1' } }
+                    },
+                    scales: {
+                        y: {
+                            title: { display: true, text: 'Portfolio Value' },
+                            ticks: { color: '#cbd5e1' },
+                            grid: { color: '#334155' }
+                        },
+                        x: {
+                            ticks: { color: '#cbd5e1' },
+                            grid: { color: '#334155' }
+                        }
+                    }
+                }
+            });
+        }
+
+        document.getElementById('stockInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addStock();
+        });
+    </script>
+</body>
+</html>
