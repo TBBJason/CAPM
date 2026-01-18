@@ -5,6 +5,7 @@ import pandas as pd
 import yfinance as yf
 from numpy.linalg import inv
 from portfolio import tangency_weights_constrained, tangency_weights
+from main import download_stock_data
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"]}})
 
@@ -51,7 +52,7 @@ def optimize():
         start_date = end_date - pd.DateOffset(years=lookback_years)
         
         print(f"Downloading historical data ({start_date.date()} to {end_date.date()})...")
-        prices = yf.download(tickers, start=start_date, end=end_date, progress=False)['Close']
+        prices = download_stock_data(tickers, start=start_date, end=end_date)
         
         if prices.isnull().all().all():
             return jsonify({'error': 'No data available for tickers'}), 400
@@ -88,7 +89,7 @@ def optimize():
         backtest_start = backtest_end - pd.DateOffset(years=1)
         
         print(f"\nRunning 1-year backtest ({backtest_start.date()} to {backtest_end.date()})...")
-        backtest_prices = yf.download(tickers, start=backtest_start, end=backtest_end, progress=False)['Close']
+        backtest_prices = download_stock_data(tickers, start=backtest_start, end=backtest_end)
         backtest_returns = ((backtest_prices / backtest_prices.shift(1)) - 1).dropna()
 
         # Portfolio daily returns
@@ -123,6 +124,6 @@ def health():
 if __name__ == '__main__':
     print("Listening on: http://localhost:5000")
     print("API endpoint: POST http://localhost:5000/api/optimize")
-    print("Health check: GET http://localhost:5000/api/health")
+    # print("Health check: GET http://localhost:5000/api/health")
     print("="*60 + "\n")
     app.run(debug=True, port=5000, threaded=True)

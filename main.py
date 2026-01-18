@@ -5,13 +5,13 @@ from portfolio import tangency_weights, tangency_weights_constrained, efficient_
 
 
 # downloading and loading data
-def download_stock_data(tickers, start_date, end_date):
-    data = yf.download(tickers, start=start_date, end=end_date)
+def download_stock_data(tickers, start, end):
+    data = yf.download(tickers, start=start, end=end)
     return data['Close']
 
 #Helper functions for calculations
-def calculate_returns(prices):
-    return ((prices / prices.shift(1)) - 1).dropna()
+# def calculate_returns(prices):
+#     return ((prices / prices.shift(1)) - 1).dropna()
 
 def calculate_annualized_return(returns, periods_per_year=252):
     return (1 + returns).prod() ** (periods_per_year / len(returns)) - 1
