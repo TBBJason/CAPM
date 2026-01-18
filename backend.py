@@ -4,19 +4,10 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from numpy.linalg import inv
-
+from portfolio import tangency_weights_constrained, tangency_weights
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"]}})
 
-def tangency_weights(mu, sigma, rf=0.0):
-    excess = mu - rf
-    try:
-        inv_sigma = inv(sigma)
-    except np.linalg.LinAlgError:
-        inv_sigma = np.linalg.pinv(sigma)
-    raw = inv_sigma @ excess
-    w = raw / raw.sum()
-    return w
 
 @app.before_request
 def handle_preflight():
@@ -56,7 +47,7 @@ def optimize():
             return jsonify({'error': 'Need at least 2 tickers'}), 400
 
         # Fetch historical data
-        end_date = pd.Timestamp.now()
+        end_date = pd.Timestamp.now() - pd.DateOffset(years=lookback_years)
         start_date = end_date - pd.DateOffset(years=lookback_years)
         
         print(f"Downloading historical data ({start_date.date()} to {end_date.date()})...")
@@ -119,7 +110,7 @@ def optimize():
         })
 
     except Exception as e:
-        print(f"\n❌ ERROR: {str(e)}")
+        print(f" RROR: {str(e)}")
         import traceback
         traceback.print_exc()
         print(f"{'='*60}\n")
@@ -130,9 +121,6 @@ def health():
     return jsonify({'status': 'ok', 'message': 'Backend is running'})
 
 if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("🚀 Portfolio Optimizer Backend Starting")
-    print("="*60)
     print("Listening on: http://localhost:5000")
     print("API endpoint: POST http://localhost:5000/api/optimize")
     print("Health check: GET http://localhost:5000/api/health")
