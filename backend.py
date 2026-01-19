@@ -43,20 +43,17 @@ def optimize():
         end_date = pd.Timestamp.now() - pd.DateOffset(years=lookback_years)
         start_date = end_date - pd.DateOffset(years=lookback_years)
         
-        print(f"Downloading historical data ({start_date.date()} to {end_date.date()})...")
         prices = download_stock_data(tickers, start=start_date, end=end_date)
         
         if prices.isnull().all().all():
             return jsonify({'error': 'No data available for tickers'}), 400
         
         returns = ((prices / prices.shift(1)) - 1).dropna()
-        print(f"  Downloaded {len(returns)} trading days")
 
         # Calculate mu, sigma
         mu = returns.mean() * 252
         sigma = returns.cov() * 252
 
-        print(f"Calculating optimal weights...")
         # Optimize
         weights_unconstrained = tangency_weights(mu.values, sigma.values, rf=rf)
         if allow_shorting:
@@ -74,11 +71,6 @@ def optimize():
         port_ret = float(weights @ mu.values)
         port_vol = float(np.sqrt(weights @ sigma.values @ weights))
         sharpe = float((port_ret - rf) / port_vol) if port_vol > 0 else 0
-
-        print(f"\nPortfolio Metrics:")
-        print(f"  Annual Return: {port_ret*100:.2f}%")
-        print(f"  Annual Volatility: {port_vol*100:.2f}%")
-        print(f"  Sharpe Ratio: {sharpe:.4f}")
 
         # Backtest (1 year)
         portfolio_value = backtest(tickers, weights)
@@ -99,7 +91,6 @@ def optimize():
         print(f" RROR: {str(e)}")
         import traceback
         traceback.print_exc()
-        print(f"{'='*60}\n")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])
@@ -110,5 +101,4 @@ if __name__ == '__main__':
     print("Listening on: http://localhost:5000")
     print("API endpoint: POST http://localhost:5000/api/optimize")
     # print("Health check: GET http://localhost:5000/api/health")
-    print("="*60 + "\n")
     app.run(debug=True, port=5000, threaded=True)
