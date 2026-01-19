@@ -23,10 +23,6 @@ def handle_preflight():
 
 @app.route('/api/optimize', methods=['POST', 'GET'])
 def optimize():
-    """
-    POST: Receive optimization request from frontend
-    GET: Health check
-    """
     try:
         if request.method == 'GET':
             return jsonify({'status': 'ok', 'message': 'POST data to this endpoint to optimize'})
@@ -38,13 +34,7 @@ def optimize():
         tickers = data.get('tickers', [])
         rf = data.get('rf', 0.04)
         lookback_years = data.get('lookback_years', 3)
-
-        print(f"\n{'='*60}")
-        print(f"Received optimization request")
-        print(f"  Tickers: {tickers}")
-        print(f"  Risk-free rate: {rf*100:.1f}%")
-        print(f"  Lookback period: {lookback_years} years")
-        print(f"{'='*60}")
+        allow_shorting = data.get('allow_shorting', False)
 
         if len(tickers) < 2:
             return jsonify({'error': 'Need at least 2 tickers'}), 400
@@ -68,9 +58,13 @@ def optimize():
 
         print(f"Calculating optimal weights...")
         # Optimize
-        weights = tangency_weights(mu.values, sigma.values, rf=rf)
-        weights = np.maximum(weights, 0)  # long-only
-        weights /= weights.sum()
+        weights_unconstrained = tangency_weights(mu.values, sigma.values, rf=rf)
+        if allow_shorting:
+            weights = weights_unconstrained
+        else:
+            weights = np.maximum(weights_unconstrained, 0) # long only
+            weights /= weights.sum()
+
 
         # Display weights
         for ticker, w in zip(tickers, weights):

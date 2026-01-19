@@ -333,7 +333,20 @@
                     </select>
                 </div>
 
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; font-weight: 500; color: #cbd5e1;">
+                        <input 
+                            type="checkbox" 
+                            id="allowShorting"
+                            style="width: 18px; height: 18px; margin-right: 8px; cursor: pointer;"
+                        >
+                        Allow Short Selling
+                    </label>
+                    <p class="input-hint">Negative weights = short positions</p>
+                </div>
+
                 <div class="tags-container" id="tagsContainer"></div>
+
 
                 <div class="button-group">
                     <button class="btn-primary" onclick="addStock()">+ Add Stock</button>
@@ -463,6 +476,7 @@
             document.getElementById('loading').style.display = 'block';
 
             try {
+                const allowShorting = document.getElementById('allowShorting').checked;
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -470,7 +484,7 @@
                         tickers: stocks,
                         rf: rf,
                         lookback_years: lookback,
-                        allow_shorting: false
+                        allow_shorting: allowShorting
                     })
                 });
 

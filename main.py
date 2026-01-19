@@ -32,13 +32,3 @@ if __name__ == "__main__":
     # print(data.head())
     stocks = download_stock_data(("AAPL", "MSFT"), '2023-01-01', '2024-01-01')
 
-    # print(aapl.head())
-
-    returns = calculate_returns(stocks)
-    # print("expected returns: ", returns.head())
-
-    expected_returns = calculate_annualized_return(returns)
-    # print("expected returns: ", expected_returns)
-    mu, sigma = calculate_mu_sigma(returns)
-    print(mu)
-    print(sigma)
