@@ -399,7 +399,7 @@
     <script>
         const stocks = [];
         let chart = null;
-        const API_URL = 'http://localhost:5000/api/optimize';
+        const API_URL = 'http://0.0.0.0:10000api/optimize';
 
         function addStock() {
             const input = document.getElementById('stockInput');
@@ -501,7 +501,7 @@
 
                 showSuccess('Portfolio optimized successfully!');
             } catch (err) {
-                showError('Error: ' + err.message + '. Make sure backend.py is running on port 5000');
+                showError('Error: ' + err.message + '. Make sure backend.py is running on port 10000');
                 console.error(err);
             } finally {
                 btn.disabled = false;

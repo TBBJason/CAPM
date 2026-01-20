@@ -109,7 +109,6 @@ def static_files(path):
 
 if __name__ == '__main__':
     print("Listening on: http://localhost:5000")
-    print("API endpoint: POST http://localhost:5000/api/optimize")
     # print("Health check: GET http://localhost:5000/api/health")
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
