@@ -7,6 +7,8 @@ from numpy.linalg import inv
 from portfolio import tangency_weights_constrained, tangency_weights
 from main import download_stock_data
 from backtest import backtest
+import os
+from flask import send_from_directory
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"]}})
@@ -97,8 +99,17 @@ def optimize():
 def health():
     return jsonify({'status': 'ok', 'message': 'Backend is running'})
 
+@app.route("/")
+def home():
+    return send_from_directory(".", "index.html")
+
+@app.route("/<path:path>")
+def static_files(path):
+    return send_from_directory(".", path)
+
 if __name__ == '__main__':
     print("Listening on: http://localhost:5000")
     print("API endpoint: POST http://localhost:5000/api/optimize")
     # print("Health check: GET http://localhost:5000/api/health")
-    app.run(debug=True, port=5000, threaded=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
