@@ -73,4 +73,5 @@ def efficient_frontier(mu, sigma, returns_range=None, points=50):
             # fallback: skip this target
             continue
 
+# fake change
     return np.array(frontier_rets), np.array(frontier_vols), np.array(frontier_weights)
