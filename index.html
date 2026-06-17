@@ -345,6 +345,19 @@
                     <p class="input-hint">Negative weights = short positions</p>
                 </div>
 
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; font-weight: 500; color: #cbd5e1;">
+                        <input 
+                            type="checkbox" 
+                            id="useShrinkage"
+                            checked
+                            style="width: 18px; height: 18px; margin-right: 8px; cursor: pointer;"
+                        >
+                        Ledoit-Wolf Shrinkage
+                    </label>
+                    <p class="input-hint">Stabilizes the covariance matrix (recommended)</p>
+                </div>
+
                 <div class="tags-container" id="tagsContainer"></div>
 
 
@@ -488,6 +501,7 @@
 
             try {
                 const allowShorting = document.getElementById('allowShorting').checked;
+                const useShrinkage = document.getElementById('useShrinkage').checked;
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -495,7 +509,8 @@
                         tickers: stocks,
                         rf: rf,
                         lookback_years: lookback,
-                        allow_shorting: allowShorting
+                        allow_shorting: allowShorting,
+                        use_shrinkage: useShrinkage
                     })
                 });
 
@@ -522,6 +537,13 @@
         }
 
         function displayMetricsFromResult(result) {
+            const shrinkageMetric = (result.shrinkage_intensity !== null && result.shrinkage_intensity !== undefined)
+                ? `
+                <div class="metric">
+                    <div class="metric-label">Shrinkage Intensity (δ)</div>
+                    <div class="metric-value">${result.shrinkage_intensity.toFixed(3)}</div>
+                </div>`
+                : '';
             const html = `
                 <div class="metric">
                     <div class="metric-label">Portfolio Return</div>
@@ -535,6 +557,7 @@
                     <div class="metric-label">Sharpe Ratio</div>
                     <div class="metric-value">${result.sharpe.toFixed(3)}</div>
                 </div>
+                ${shrinkageMetric}
             `;
             document.getElementById('metricsContainer').innerHTML = html;
         }

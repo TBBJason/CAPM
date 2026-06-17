@@ -145,3 +145,31 @@ def test_frontier_endpoint_get_is_ok(client):
     resp = client.get("/api/frontier")
     assert resp.status_code == 200
     assert resp.get_json()["status"] == "ok"
+
+
+def test_shrinkage_on_by_default_reports_intensity(client, monkeypatch):
+    cols = ["AAPL", "GOOG", "MSFT"]
+    monkeypatch.setattr(
+        backend, "download_stock_data",
+        lambda tickers, start, end: _synthetic_prices(cols),
+    )
+    resp = client.post("/api/optimize", json={
+        "tickers": cols, "lookback_years": 3,
+    })
+    assert resp.status_code == 200
+    delta = resp.get_json()["shrinkage_intensity"]
+    assert delta is not None
+    assert 0.0 <= delta <= 1.0
+
+
+def test_shrinkage_can_be_disabled(client, monkeypatch):
+    cols = ["AAPL", "GOOG", "MSFT"]
+    monkeypatch.setattr(
+        backend, "download_stock_data",
+        lambda tickers, start, end: _synthetic_prices(cols),
+    )
+    resp = client.post("/api/optimize", json={
+        "tickers": cols, "lookback_years": 3, "use_shrinkage": False,
+    })
+    assert resp.status_code == 200
+    assert resp.get_json()["shrinkage_intensity"] is None

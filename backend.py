@@ -8,6 +8,7 @@ from portfolio import (
     efficient_frontier,
 )
 from main import download_stock_data
+from main import ledoit_wolf_cov
 from backtest import backtest
 import os
 from flask import send_from_directory
@@ -61,15 +62,21 @@ def _parse_request(data):
         "rf": data.get("rf", 0.04),
         "lookback_years": data.get("lookback_years", 3),
         "allow_shorting": bool(data.get("allow_shorting", False)),
+        "use_shrinkage": bool(data.get("use_shrinkage", True)),
     }
 
 
-def _load_market_data(tickers, lookback_years):
-    """Download prices and return (columns, mu, sigma, dropped, test_prices).
+def _load_market_data(tickers, lookback_years, use_shrinkage=True):
+    """Download prices and return (columns, mu, sigma, dropped, test_prices, shrinkage).
 
     Trains on the lookback window ending one year ago and holds out the most
     recent year (``test_prices``) for out-of-sample use. All returned arrays
     follow ``columns`` order, which is the (alphabetical) yfinance column order.
+
+    When ``use_shrinkage`` is True the covariance is estimated with the
+    Ledoit-Wolf constant-correlation shrinkage estimator instead of the raw
+    sample covariance, which produces a better-conditioned, more stable matrix.
+    ``shrinkage`` is the estimated intensity in [0, 1] (None when not used).
     """
     test_end = pd.Timestamp.now()
     split = test_end - pd.DateOffset(years=BACKTEST_YEARS)
@@ -91,8 +98,17 @@ def _load_market_data(tickers, lookback_years):
         raise RequestError("Not enough history in the lookback window")
 
     mu = train_returns.mean() * TRADING_DAYS
-    sigma = train_returns.cov() * TRADING_DAYS
-    return columns, mu, sigma, dropped, test_prices
+
+    shrinkage = None
+    if use_shrinkage:
+        sigma_daily, shrinkage = ledoit_wolf_cov(train_returns.values)
+        sigma = pd.DataFrame(
+            sigma_daily * TRADING_DAYS, index=columns, columns=columns
+        )
+    else:
+        sigma = train_returns.cov() * TRADING_DAYS
+
+    return columns, mu, sigma, dropped, test_prices, shrinkage
 
 
 def _solve_weights(mu, sigma, rf, allow_shorting):
@@ -141,8 +157,8 @@ def optimize():
         rf = params["rf"]
         allow_shorting = params["allow_shorting"]
 
-        columns, mu, sigma, dropped, test_prices = _load_market_data(
-            tickers, params["lookback_years"]
+        columns, mu, sigma, dropped, test_prices, shrinkage = _load_market_data(
+            tickers, params["lookback_years"], use_shrinkage=params["use_shrinkage"]
         )
 
         weights = _solve_weights(mu, sigma, rf, allow_shorting)
@@ -162,6 +178,7 @@ def optimize():
             'volatility': port_vol,
             'sharpe': sharpe,
             'backtest_values': portfolio_value.tolist(),
+            'shrinkage_intensity': shrinkage,
             # Frontier is included so the UI can plot it without a second call.
             'frontier': _compute_frontier(columns, mu, sigma, rf, allow_shorting),
         }
@@ -186,12 +203,14 @@ def frontier():
             return jsonify({'status': 'ok', 'message': 'POST tickers to this endpoint for the efficient frontier'})
 
         params = _parse_request(request.json)
-        columns, mu, sigma, dropped, _ = _load_market_data(
-            params["tickers"], params["lookback_years"]
+        columns, mu, sigma, dropped, _, shrinkage = _load_market_data(
+            params["tickers"], params["lookback_years"],
+            use_shrinkage=params["use_shrinkage"],
         )
         response = _compute_frontier(
             columns, mu, sigma, params["rf"], params["allow_shorting"]
         )
+        response['shrinkage_intensity'] = shrinkage
         if dropped:
             response['warning'] = f"No data for: {', '.join(dropped)}"
         return jsonify(response)
