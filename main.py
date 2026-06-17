@@ -6,15 +6,23 @@ from portfolio import tangency_weights, tangency_weights_constrained, efficient_
 
 # downloading and loading data
 def download_stock_data(tickers, start, end):
-    data = yf.download(tickers, start=start, end=end)
-    return data['Close']
+    """Download adjusted close prices, always returning a DataFrame.
 
-#Helper functions for calculations
-# def calculate_returns(prices):
-#     return ((prices / prices.shift(1)) - 1).dropna()
+    yfinance returns a Series for a single ticker; we normalise to a one-column
+    DataFrame so callers can rely on a consistent shape and on ``.columns``.
+    """
+    if isinstance(tickers, str):
+        tickers = [tickers]
+    data = yf.download(list(tickers), start=start, end=end, auto_adjust=True)
+    close = data['Close']
+    if isinstance(close, pd.Series):
+        close = close.to_frame(name=tickers[0])
+    return close
+
 
 def calculate_annualized_return(returns, periods_per_year=252):
     return (1 + returns).prod() ** (periods_per_year / len(returns)) - 1
+
 
 def calculate_mu_sigma(returns, annualized=True, periods_per_year=252):
     mu = returns.mean()
@@ -22,13 +30,9 @@ def calculate_mu_sigma(returns, annualized=True, periods_per_year=252):
     if annualized:
         mu = mu * periods_per_year
         sigma = sigma * periods_per_year
-    return mu.values, sigma.values  
-
-
+    return mu.values, sigma.values
 
 
 if __name__ == "__main__":
-    # data = yf.download("AAPL", start="2020-01-01", end="2021-01-01")
-    # print(data.head())
     stocks = download_stock_data(("AAPL", "MSFT"), '2023-01-01', '2024-01-01')
-
+    print(stocks.head())
