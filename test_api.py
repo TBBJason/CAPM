@@ -93,3 +93,55 @@ def test_optimize_allow_shorting_can_go_negative(client, monkeypatch):
     body = resp.get_json()
     # Weights still sum to 1 under shorting.
     assert sum(body["weights"].values()) == pytest.approx(1.0, abs=1e-6)
+
+
+def _assert_valid_frontier(fr, expected_tickers):
+    assert set(fr.keys()) >= {"rf", "frontier", "tangency", "assets"}
+    assert len(fr["frontier"]) > 1
+    for pt in fr["frontier"]:
+        assert pt["volatility"] >= 0
+    # Tangency point is well-formed.
+    assert fr["tangency"]["volatility"] > 0
+    assert "sharpe" in fr["tangency"]
+    # One asset point per ticker, labelled correctly.
+    assert {a["ticker"] for a in fr["assets"]} == set(expected_tickers)
+
+
+def test_optimize_includes_frontier(client, monkeypatch):
+    cols = ["AAPL", "GOOG", "MSFT"]
+    monkeypatch.setattr(
+        backend, "download_stock_data",
+        lambda tickers, start, end: _synthetic_prices(cols),
+    )
+    resp = client.post("/api/optimize", json={
+        "tickers": ["MSFT", "AAPL", "GOOG"],
+        "lookback_years": 3,
+    })
+    assert resp.status_code == 200
+    _assert_valid_frontier(resp.get_json()["frontier"], cols)
+
+
+def test_frontier_endpoint(client, monkeypatch):
+    cols = ["AAPL", "GOOG", "MSFT"]
+    monkeypatch.setattr(
+        backend, "download_stock_data",
+        lambda tickers, start, end: _synthetic_prices(cols),
+    )
+    resp = client.post("/api/frontier", json={
+        "tickers": ["MSFT", "AAPL", "GOOG"],
+        "rf": 0.04,
+        "lookback_years": 3,
+    })
+    assert resp.status_code == 200
+    _assert_valid_frontier(resp.get_json(), cols)
+
+
+def test_frontier_endpoint_requires_two_tickers(client):
+    resp = client.post("/api/frontier", json={"tickers": ["AAPL"]})
+    assert resp.status_code == 400
+
+
+def test_frontier_endpoint_get_is_ok(client):
+    resp = client.get("/api/frontier")
+    assert resp.status_code == 200
+    assert resp.get_json()["status"] == "ok"

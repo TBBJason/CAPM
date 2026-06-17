@@ -379,9 +379,19 @@
             </div>
         </div>
 
+        <!-- Efficient Frontier Chart -->
+        <div class="card full-width">
+            <h2>Efficient Frontier</h2>
+            <div id="frontierContainer">
+                <p style="color: #94a3b8; text-align: center; padding: 20px;">
+                    Run optimization to see the efficient frontier and tangency portfolio
+                </p>
+            </div>
+        </div>
+
         <!-- Backtest Chart -->
         <div class="card full-width">
-            <h2>Backtest Results (1 Year)</h2>
+            <h2>Backtest Results (1 Year, Out-of-Sample)</h2>
             <div id="backtestContainer">
                 <p style="color: #94a3b8; text-align: center; padding: 20px;">
                     Run optimization to see backtest
@@ -399,6 +409,7 @@
     <script>
         const stocks = [];
         let chart = null;
+        let frontierChart = null;
         const API_URL = '/api/optimize';
 
         function addStock() {
@@ -497,6 +508,7 @@
 
                 displayMetricsFromResult(result);
                 displayAllocations(result.weights);
+                displayFrontier(result.frontier);
                 displayBacktest(result.backtest_values);
 
                 showSuccess('Portfolio optimized successfully!');
@@ -550,6 +562,122 @@
                 </table>
             `;
             document.getElementById('allocationsContainer').innerHTML = html;
+        }
+
+        function displayFrontier(frontier) {
+            if (!frontier || !frontier.frontier || !frontier.frontier.length) {
+                document.getElementById('frontierContainer').innerHTML =
+                    '<p style="color:#94a3b8;text-align:center;padding:20px;">Frontier unavailable for this selection</p>';
+                return;
+            }
+
+            const ctx = document.createElement('canvas');
+            const container = document.getElementById('frontierContainer');
+            container.innerHTML = '';
+            const wrap = document.createElement('div');
+            wrap.className = 'chart-container';
+            wrap.appendChild(ctx);
+            container.appendChild(wrap);
+
+            if (frontierChart) frontierChart.destroy();
+
+            const toPct = v => +(v * 100).toFixed(2);
+            const frontierPts = frontier.frontier
+                .map(p => ({ x: toPct(p.volatility), y: toPct(p.return) }))
+                .sort((a, b) => a.x - b.x);
+            const tangency = {
+                x: toPct(frontier.tangency.volatility),
+                y: toPct(frontier.tangency.return)
+            };
+            const assetPts = frontier.assets.map(a => ({
+                x: toPct(a.volatility), y: toPct(a.return), ticker: a.ticker
+            }));
+
+            // Capital Market Line: from (0, rf) through the tangency point.
+            const rf = toPct(frontier.rf);
+            const maxX = Math.max(
+                ...frontierPts.map(p => p.x),
+                ...assetPts.map(p => p.x),
+                tangency.x
+            ) * 1.1;
+            const slope = tangency.x > 0 ? (tangency.y - rf) / tangency.x : 0;
+            const cml = [{ x: 0, y: rf }, { x: maxX, y: rf + slope * maxX }];
+
+            frontierChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Efficient Frontier',
+                            data: frontierPts,
+                            showLine: true,
+                            borderColor: '#38bdf8',
+                            backgroundColor: '#38bdf8',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.2,
+                            order: 3
+                        },
+                        {
+                            label: 'Capital Market Line',
+                            data: cml,
+                            showLine: true,
+                            borderColor: '#10b981',
+                            borderDash: [6, 6],
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            order: 4
+                        },
+                        {
+                            label: 'Tangency (Max Sharpe)',
+                            data: [tangency],
+                            backgroundColor: '#f59e0b',
+                            borderColor: '#f59e0b',
+                            pointRadius: 9,
+                            pointStyle: 'star',
+                            pointHoverRadius: 12,
+                            order: 1
+                        },
+                        {
+                            label: 'Individual Assets',
+                            data: assetPts,
+                            backgroundColor: '#cbd5e1',
+                            borderColor: '#94a3b8',
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            order: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#cbd5e1', usePointStyle: true } },
+                        tooltip: {
+                            callbacks: {
+                                label: (item) => {
+                                    const d = item.raw;
+                                    const name = d.ticker ? d.ticker + ': ' : '';
+                                    return `${name}σ ${d.x}%, return ${d.y}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Volatility (annualized %)', color: '#cbd5e1' },
+                            ticks: { color: '#cbd5e1' },
+                            grid: { color: '#334155' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Expected Return (annualized %)', color: '#cbd5e1' },
+                            ticks: { color: '#cbd5e1' },
+                            grid: { color: '#334155' }
+                        }
+                    }
+                }
+            });
         }
 
         function displayBacktest(portfolioValue) {

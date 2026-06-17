@@ -42,7 +42,7 @@ def tangency_weights_constrained(mu, sigma, rf=0.0, bounds=None):
 
 
 # Efficient frontier (min variance for target returns)
-def efficient_frontier(mu, sigma, returns_range=None, points=50):
+def efficient_frontier(mu, sigma, returns_range=None, points=50, allow_shorting=False):
     n = len(mu)
     if returns_range is None:
         # min and max possible portfolio returns (using unconstrained min-variance and max-return)
@@ -56,7 +56,12 @@ def efficient_frontier(mu, sigma, returns_range=None, points=50):
     def var_obj(w):
         return w.dot(sigma).dot(w)
 
-    bounds = [(0.0,1.0)] * n  # change if you want allow shorting
+    # Long-only by default; allow shorting widens the bounds so the frontier
+    # can extend past the individual-asset return range.
+    if allow_shorting:
+        bounds = [(None, None)] * n
+    else:
+        bounds = [(0.0, 1.0)] * n
     for target in returns_range:
         cons = (
             {'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0},
