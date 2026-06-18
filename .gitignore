@@ -12,3 +12,7 @@ env/
 
 # Env
 .env
+
+# Local design notes (not tracked)
+DESIGN_NOTES.md
+
