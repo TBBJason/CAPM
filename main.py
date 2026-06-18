@@ -33,6 +33,33 @@ def calculate_mu_sigma(returns, annualized=True, periods_per_year=252):
     return mu.values, sigma.values
 
 
+def fetch_fundamentals(tickers):
+    """Fetch key fundamental metrics for each ticker via yfinance.
+
+    Returns a dict keyed by ticker. Missing fields are returned as ``None`` so
+    the frontend can render them gracefully, and any per-ticker network/parse
+    error is isolated under an ``"error"`` key rather than failing the request.
+    """
+    if isinstance(tickers, str):
+        tickers = [tickers]
+    results = {}
+    for sym in tickers:
+        try:
+            info = yf.Ticker(sym).info or {}
+            results[sym] = {
+                "name": info.get("longName") or info.get("shortName") or sym,
+                "price": info.get("currentPrice") or info.get("regularMarketPrice"),
+                "currency": info.get("currency"),
+                "market_cap": info.get("marketCap"),
+                "pe": info.get("trailingPE"),
+                "revenue": info.get("totalRevenue"),
+                "beta": info.get("beta"),
+            }
+        except Exception as e:  # isolate a single bad ticker
+            results[sym] = {"error": str(e)}
+    return results
+
+
 def ledoit_wolf_cov(returns):
     """Ledoit-Wolf shrinkage of the sample covariance matrix.
 

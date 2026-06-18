@@ -9,6 +9,7 @@ from portfolio import (
 )
 from main import download_stock_data
 from main import ledoit_wolf_cov
+from main import fetch_fundamentals
 from backtest import backtest
 import os
 from flask import send_from_directory
@@ -214,6 +215,35 @@ def frontier():
         if dropped:
             response['warning'] = f"No data for: {', '.join(dropped)}"
         return jsonify(response)
+
+    except RequestError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/fundamentals', methods=['POST', 'GET'])
+def fundamentals():
+    """Return key fundamental metrics (market cap, P/E, revenue, beta) per ticker."""
+    try:
+        if request.method == 'GET':
+            return jsonify({'status': 'ok', 'message': 'POST tickers to this endpoint for fundamentals'})
+
+        data = request.json
+        if not data:
+            raise RequestError("No JSON data provided")
+        tickers = data.get("tickers", [])
+        tickers = [str(t).strip().upper() for t in tickers if str(t).strip()]
+        tickers = list(dict.fromkeys(tickers))  # de-dupe, preserve order
+        if not tickers:
+            raise RequestError("Need at least 1 ticker")
+        if len(tickers) > MAX_TICKERS:
+            raise RequestError(f"Maximum {MAX_TICKERS} tickers allowed")
+
+        return jsonify({'fundamentals': fetch_fundamentals(tickers)})
 
     except RequestError as e:
         return jsonify({'error': str(e)}), 400

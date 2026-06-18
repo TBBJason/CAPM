@@ -173,3 +173,42 @@ def test_shrinkage_can_be_disabled(client, monkeypatch):
     })
     assert resp.status_code == 200
     assert resp.get_json()["shrinkage_intensity"] is None
+
+
+def _fake_fundamentals(tickers):
+    return {
+        t: {
+            "name": f"{t} Inc.", "price": 100.0, "currency": "USD",
+            "market_cap": 2_500_000_000_000, "pe": 28.5,
+            "revenue": 390_000_000_000, "beta": 1.2,
+        }
+        for t in tickers
+    }
+
+
+def test_fundamentals_endpoint_returns_metrics(client, monkeypatch):
+    monkeypatch.setattr(backend, "fetch_fundamentals", _fake_fundamentals)
+    resp = client.post("/api/fundamentals", json={"tickers": ["AAPL", "MSFT"]})
+    assert resp.status_code == 200
+    funds = resp.get_json()["fundamentals"]
+    assert set(funds.keys()) == {"AAPL", "MSFT"}
+    for sym in ("AAPL", "MSFT"):
+        assert {"market_cap", "pe", "revenue", "beta"} <= set(funds[sym].keys())
+
+
+def test_fundamentals_allows_single_ticker(client, monkeypatch):
+    monkeypatch.setattr(backend, "fetch_fundamentals", _fake_fundamentals)
+    resp = client.post("/api/fundamentals", json={"tickers": ["AAPL"]})
+    assert resp.status_code == 200
+    assert "AAPL" in resp.get_json()["fundamentals"]
+
+
+def test_fundamentals_requires_at_least_one_ticker(client):
+    resp = client.post("/api/fundamentals", json={"tickers": []})
+    assert resp.status_code == 400
+
+
+def test_fundamentals_get_is_ok(client):
+    resp = client.get("/api/fundamentals")
+    assert resp.status_code == 200
+    assert resp.get_json()["status"] == "ok"

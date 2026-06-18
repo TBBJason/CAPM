@@ -285,6 +285,95 @@
             margin-top: 10px;
             min-height: 32px;
         }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--color-surface);
+        }
+
+        .tab-btn {
+            flex: 0 0 auto;
+            background: none;
+            border: none;
+            border-radius: 0;
+            color: #94a3b8;
+            padding: 12px 22px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: color 0.2s ease, border-color 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--color-text);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .tab-btn.active {
+            color: var(--color-accent);
+            border-bottom-color: var(--color-accent);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Fundamentals cards */
+        .fund-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 20px;
+        }
+
+        .fund-card {
+            background-color: #0f172a;
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid var(--color-accent);
+        }
+
+        .fund-card h3 {
+            font-size: 1.4rem;
+            color: var(--color-accent);
+            margin-bottom: 2px;
+        }
+
+        .fund-card .fund-sub {
+            color: #94a3b8;
+            font-size: 0.85rem;
+            margin-bottom: 14px;
+        }
+
+        .fund-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .fund-metric {
+            background-color: var(--color-surface);
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+
+        .fund-metric span {
+            display: block;
+            color: #94a3b8;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .fund-metric strong {
+            display: block;
+            margin-top: 4px;
+            font-size: 1.1rem;
+            color: var(--color-text);
+        }
     </style>
 </head>
 <body>
@@ -294,6 +383,12 @@
             <p class="subtitle">Maximize Sharpe Ratio with Modern Portfolio Theory</p>
         </header>
 
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('optimizer', this)">📊 Optimizer</button>
+            <button class="tab-btn" onclick="switchTab('stockdata', this)">📈 Stock Data</button>
+        </div>
+
+        <div id="tab-optimizer" class="tab-content active">
         <div class="main-grid">
             <!-- Input Section -->
             <div class="card">
@@ -417,6 +512,25 @@
             <div class="spinner"></div>
             <p>Fetching market data and optimizing...</p>
         </div>
+        </div><!-- /tab-optimizer -->
+
+        <div id="tab-stockdata" class="tab-content">
+            <div class="card full-width">
+                <h2>Stock Technical Data</h2>
+                <p class="input-hint" style="margin-bottom: 15px;">
+                    Key fundamentals for the stocks in your portfolio (add them in the Optimizer tab).
+                </p>
+                <div class="error" id="fundError"></div>
+                <button class="btn-primary" style="max-width: 280px;" onclick="loadFundamentals()" id="loadFundBtn">
+                    📈 Load Stock Data
+                </button>
+                <div id="fundamentalsContainer" style="margin-top: 20px;">
+                    <p style="color: #94a3b8; text-align: center; padding: 20px;">
+                        Add stocks in the Optimizer tab, then load their data here.
+                    </p>
+                </div>
+            </div>
+        </div><!-- /tab-stockdata -->
     </div>
 
     <script>
@@ -750,6 +864,109 @@
         document.getElementById('stockInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') addStock();
         });
+
+        // ---- Tabs ----
+        function switchTab(name, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            if (btn) btn.classList.add('active');
+        }
+
+        // ---- Stock fundamentals ----
+        function showFundError(msg) {
+            const el = document.getElementById('fundError');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function clearFundError() {
+            document.getElementById('fundError').style.display = 'none';
+        }
+
+        function formatMoney(v) {
+            if (v === null || v === undefined) return '—';
+            const a = Math.abs(v);
+            if (a >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+            if (a >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
+            if (a >= 1e6) return '$' + (v / 1e6).toFixed(2) + 'M';
+            return '$' + Number(v).toLocaleString();
+        }
+
+        function formatNum(v, digits = 2) {
+            if (v === null || v === undefined) return '—';
+            return Number(v).toFixed(digits);
+        }
+
+        async function loadFundamentals() {
+            clearFundError();
+            const container = document.getElementById('fundamentalsContainer');
+            if (stocks.length === 0) {
+                showFundError('Add at least one stock in the Optimizer tab first');
+                return;
+            }
+
+            const btn = document.getElementById('loadFundBtn');
+            btn.disabled = true;
+            container.innerHTML = '<div class="loading" style="display:block;"><div class="spinner"></div><p>Fetching stock data...</p></div>';
+
+            try {
+                const response = await fetch('/api/fundamentals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tickers: stocks })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || `HTTP Error: ${response.status}`);
+                }
+
+                const result = await response.json();
+                renderFundamentals(result.fundamentals);
+            } catch (err) {
+                container.innerHTML = '';
+                showFundError('Error: ' + err.message);
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function renderFundamentals(data) {
+            const symbols = Object.keys(data);
+            if (symbols.length === 0) {
+                document.getElementById('fundamentalsContainer').innerHTML =
+                    '<p style="color:#94a3b8;text-align:center;padding:20px;">No data returned.</p>';
+                return;
+            }
+
+            const cards = symbols.map(sym => {
+                const d = data[sym];
+                if (!d || d.error) {
+                    return `<div class="fund-card">
+                        <h3>${sym}</h3>
+                        <p class="fund-sub" style="color:#fca5a5;">Data unavailable</p>
+                    </div>`;
+                }
+                const cur = d.currency ? d.currency + ' ' : '';
+                const sub = [d.name, d.price != null ? cur + formatNum(d.price) : null]
+                    .filter(Boolean).join(' · ');
+                return `<div class="fund-card">
+                    <h3>${sym}</h3>
+                    <p class="fund-sub">${sub || '&nbsp;'}</p>
+                    <div class="fund-grid">
+                        <div class="fund-metric"><span>Market Cap</span><strong>${formatMoney(d.market_cap)}</strong></div>
+                        <div class="fund-metric"><span>P/E (TTM)</span><strong>${formatNum(d.pe)}</strong></div>
+                        <div class="fund-metric"><span>Revenue (TTM)</span><strong>${formatMoney(d.revenue)}</strong></div>
+                        <div class="fund-metric"><span>Beta</span><strong>${formatNum(d.beta)}</strong></div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            document.getElementById('fundamentalsContainer').innerHTML =
+                `<div class="fund-cards">${cards}</div>`;
+        }
     </script>
 </body>
 </html>
