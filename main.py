@@ -2,14 +2,17 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from portfolio import tangency_weights, tangency_weights_constrained, efficient_frontier
+from yf_utils import ttl_cache, with_retry, is_rate_limit_error, RateLimitedError
 
 
 # downloading and loading data
+@with_retry(max_attempts=3, base_delay=0.8)
 def download_stock_data(tickers, start, end):
     """Download adjusted close prices, always returning a DataFrame.
 
     yfinance returns a Series for a single ticker; we normalise to a one-column
     DataFrame so callers can rely on a consistent shape and on ``.columns``.
+    Retries on transient Yahoo Finance rate-limit errors.
     """
     if isinstance(tickers, str):
         tickers = [tickers]
@@ -33,30 +36,46 @@ def calculate_mu_sigma(returns, annualized=True, periods_per_year=252):
     return mu.values, sigma.values
 
 
+# Fundamentals change slowly, so cache them for 10 minutes. The `.info`
+# endpoint is the single most rate-limited yfinance call, so caching plus
+# backoff retries is what keeps this working on shared hosting IPs.
+@ttl_cache(ttl_seconds=600)
+@with_retry(max_attempts=3, base_delay=0.8)
+def _fetch_one_fundamental(sym):
+    """Fetch and normalise fundamentals for a single ticker (cached + retried)."""
+    info = yf.Ticker(sym).info or {}
+    return {
+        "name": info.get("longName") or info.get("shortName") or sym,
+        "price": info.get("currentPrice") or info.get("regularMarketPrice"),
+        "currency": info.get("currency"),
+        "market_cap": info.get("marketCap"),
+        "pe": info.get("trailingPE"),
+        "revenue": info.get("totalRevenue"),
+        "beta": info.get("beta"),
+    }
+
+
 def fetch_fundamentals(tickers):
     """Fetch key fundamental metrics for each ticker via yfinance.
 
     Returns a dict keyed by ticker. Missing fields are returned as ``None`` so
     the frontend can render them gracefully, and any per-ticker network/parse
-    error is isolated under an ``"error"`` key rather than failing the request.
+    error is isolated under an ``"error"`` key (with ``"rate_limited": True``
+    when Yahoo throttled us) rather than failing the whole request.
     """
     if isinstance(tickers, str):
         tickers = [tickers]
     results = {}
     for sym in tickers:
         try:
-            info = yf.Ticker(sym).info or {}
-            results[sym] = {
-                "name": info.get("longName") or info.get("shortName") or sym,
-                "price": info.get("currentPrice") or info.get("regularMarketPrice"),
-                "currency": info.get("currency"),
-                "market_cap": info.get("marketCap"),
-                "pe": info.get("trailingPE"),
-                "revenue": info.get("totalRevenue"),
-                "beta": info.get("beta"),
-            }
+            results[sym] = _fetch_one_fundamental(sym)
+        except RateLimitedError as e:
+            results[sym] = {"error": str(e), "rate_limited": True}
         except Exception as e:  # isolate a single bad ticker
-            results[sym] = {"error": str(e)}
+            results[sym] = {
+                "error": str(e),
+                "rate_limited": is_rate_limit_error(e),
+            }
     return results
 
 

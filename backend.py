@@ -12,6 +12,7 @@ from main import ledoit_wolf_cov
 from main import fetch_fundamentals
 from options import fetch_expirations, fetch_option_chain
 from backtest import backtest
+from yf_utils import RateLimitedError
 import os
 from flask import send_from_directory
 
@@ -190,6 +191,8 @@ def optimize():
 
     except RequestError as e:
         return jsonify({'error': str(e)}), 400
+    except RateLimitedError as e:
+        return jsonify({'error': str(e), 'rate_limited': True}), 429
     except Exception as e:
         print(f"ERROR: {str(e)}")
         import traceback
@@ -219,6 +222,8 @@ def frontier():
 
     except RequestError as e:
         return jsonify({'error': str(e)}), 400
+    except RateLimitedError as e:
+        return jsonify({'error': str(e), 'rate_limited': True}), 429
     except Exception as e:
         print(f"ERROR: {str(e)}")
         import traceback
@@ -248,6 +253,8 @@ def fundamentals():
 
     except RequestError as e:
         return jsonify({'error': str(e)}), 400
+    except RateLimitedError as e:
+        return jsonify({'error': str(e), 'rate_limited': True}), 429
     except Exception as e:
         print(f"ERROR: {str(e)}")
         import traceback
@@ -280,6 +287,8 @@ def options_expirations():
 
     except RequestError as e:
         return jsonify({'error': str(e)}), 400
+    except RateLimitedError as e:
+        return jsonify({'error': str(e), 'rate_limited': True}), 429
     except Exception as e:
         print(f"ERROR: {str(e)}")
         import traceback
@@ -311,6 +320,8 @@ def options_chain():
 
     except RequestError as e:
         return jsonify({'error': str(e)}), 400
+    except RateLimitedError as e:
+        return jsonify({'error': str(e), 'rate_limited': True}), 429
     except Exception as e:
         print(f"ERROR: {str(e)}")
         import traceback

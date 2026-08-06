@@ -1052,12 +1052,23 @@
                 return;
             }
 
+            const anyRateLimited = symbols.some(s => data[s] && data[s].rate_limited);
+            const banner = anyRateLimited
+                ? `<div class="error" style="display:block;margin-bottom:16px;">
+                     ⚠️ Yahoo Finance is rate-limiting requests right now. Wait a minute, then click
+                     "Load Stock Data" again — results are cached once they load.
+                   </div>`
+                : '';
+
             const cards = symbols.map(sym => {
                 const d = data[sym];
                 if (!d || d.error) {
+                    const msg = d && d.rate_limited
+                        ? 'Rate limited — try again shortly'
+                        : 'Data unavailable';
                     return `<div class="fund-card">
                         <h3>${sym}</h3>
-                        <p class="fund-sub" style="color:#fca5a5;">Data unavailable</p>
+                        <p class="fund-sub" style="color:#fca5a5;">${msg}</p>
                     </div>`;
                 }
                 const cur = d.currency ? d.currency + ' ' : '';
@@ -1076,7 +1087,7 @@
             }).join('');
 
             document.getElementById('fundamentalsContainer').innerHTML =
-                `<div class="fund-cards">${cards}</div>`;
+                `${banner}<div class="fund-cards">${cards}</div>`;
         }
 
         // ---- Options chain & Greeks ----

@@ -45,6 +45,7 @@ more stable, realistic weights.
 | `portfolio.py` | Optimization math: tangency weights (closed-form & constrained), efficient frontier. |
 | `main.py` | Data download (`yfinance`) and estimators, including Ledoit–Wolf shrinkage. |
 | `options.py` | Option chain retrieval and Black–Scholes pricing/Greeks. |
+| `yf_utils.py` | Resilience helpers for yfinance: TTL caching + retry/backoff for rate limits. |
 | `backtest.py` | Cumulative portfolio-value backtest (accepts pre-fetched prices). |
 | `index.html` | Frontend UI and charts. |
 | `test_portfolio.py`, `test_api.py`, `test_estimators.py`, `test_options.py` | Pytest suite. |
@@ -187,6 +188,23 @@ the app via the `Procfile` (`gunicorn backend:app`). Pushing to the deployed
 branch triggers a redeploy.
 
 ---
+
+## Yahoo Finance rate limits
+
+Yahoo Finance rate-limits by IP, so shared hosting (Render, Heroku, etc.) can
+hit **"Too Many Requests" (HTTP 429)** — most often on the `.info` call behind
+the fundamentals, and on repeated option-chain requests. To stay resilient the
+data layer (`yf_utils.py`) applies:
+
+- **Short-lived in-process caching** — fundamentals (10 min), option
+  expirations (10 min), spot price and raw chains (60 s) — so repeat requests
+  don't hit Yahoo again.
+- **Exponential-backoff retries** on transient rate-limit errors.
+- **Clean `429` responses** with a clear "wait a minute and try again" message;
+  the UI surfaces this and the results are cached once they load.
+
+If you still see rate-limit messages, wait ~1 minute and retry — the cache and
+backoff will usually clear it.
 
 ## Caveats
 

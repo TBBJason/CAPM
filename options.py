@@ -17,6 +17,8 @@ import pandas as pd
 import yfinance as yf
 from scipy.stats import norm
 
+from yf_utils import ttl_cache, with_retry
+
 
 # Fields we surface from the raw yfinance chain (everything else is dropped).
 _CHAIN_FIELDS = [
@@ -118,13 +120,17 @@ def black_scholes_greeks(S, K, T, r, sigma, option_type="call", q=0.0):
     }
 
 
-def _underlying_price(ticker):
-    """Best-effort spot price for ``ticker``.
+# Spot price moves intraday but not by the second; a short 60s cache absorbs
+# the several redundant lookups a single "load options" click triggers.
+@ttl_cache(ttl_seconds=60)
+@with_retry(max_attempts=3, base_delay=0.8)
+def _underlying_price(symbol):
+    """Best-effort spot price for ``symbol`` (cached + retried).
 
     fast_info is quick but occasionally returns None, so we fall back to the
     last daily close before giving up.
     """
-    tk = ticker if isinstance(ticker, yf.Ticker) else yf.Ticker(ticker)
+    tk = yf.Ticker(symbol)
     for getter in (
         lambda: tk.fast_info.get("last_price"),
         lambda: tk.fast_info.get("lastPrice"),
@@ -139,6 +145,13 @@ def _underlying_price(ticker):
     return None
 
 
+# Expiration lists are stable through the trading day; cache for 10 minutes.
+@ttl_cache(ttl_seconds=600)
+@with_retry(max_attempts=3, base_delay=0.8)
+def _fetch_expirations_raw(symbol):
+    return list(yf.Ticker(symbol).options or [])
+
+
 def fetch_expirations(ticker):
     """Return available option expiration dates and the underlying spot price.
 
@@ -147,12 +160,10 @@ def fetch_expirations(ticker):
     dict
         ``{"ticker", "underlying_price", "expirations": [...]}``.
     """
-    tk = yf.Ticker(ticker)
-    expirations = list(tk.options or [])
     return {
         "ticker": ticker,
-        "underlying_price": _underlying_price(tk),
-        "expirations": expirations,
+        "underlying_price": _underlying_price(ticker),
+        "expirations": _fetch_expirations_raw(ticker),
     }
 
 
@@ -189,6 +200,17 @@ def _enrich_side(df, S, T, r, option_type, q=0.0):
     return rows
 
 
+# Cache the raw chain (strikes, quotes, implied vols) for 60s. Greeks are NOT
+# cached here -- they're recomputed on each call so a changed risk-free rate or
+# dividend yield takes effect immediately without another network round-trip.
+@ttl_cache(ttl_seconds=60)
+@with_retry(max_attempts=3, base_delay=0.8)
+def _fetch_chain_raw(ticker, expiry):
+    """Fetch the raw calls/puts frames for one expiry (cached + retried)."""
+    chain = yf.Ticker(ticker).option_chain(expiry)  # raises on an invalid expiry
+    return chain.calls, chain.puts
+
+
 def fetch_option_chain(ticker, expiry, rf=0.04, q=0.0):
     """Fetch one expiry's option chain with Black-Scholes Greeks attached.
 
@@ -210,12 +232,11 @@ def fetch_option_chain(ticker, expiry, rf=0.04, q=0.0):
         Underlying price, time to expiry, and ``calls``/``puts`` lists where
         each contract carries its Greeks plus a model ``bs_price``.
     """
-    tk = yf.Ticker(ticker)
-    S = _underlying_price(tk)
+    S = _underlying_price(ticker)
     if S is None:
         raise ValueError(f"Could not determine underlying price for {ticker}")
 
-    chain = tk.option_chain(expiry)  # raises if the expiry is invalid
+    calls_raw, puts_raw = _fetch_chain_raw(ticker, expiry)
     T = _years_to_expiry(expiry)
 
     return {
@@ -224,6 +245,6 @@ def fetch_option_chain(ticker, expiry, rf=0.04, q=0.0):
         "underlying_price": S,
         "risk_free_rate": rf,
         "years_to_expiry": T,
-        "calls": _enrich_side(chain.calls, S, T, rf, "call", q=q),
-        "puts": _enrich_side(chain.puts, S, T, rf, "put", q=q),
+        "calls": _enrich_side(calls_raw, S, T, rf, "call", q=q),
+        "puts": _enrich_side(puts_raw, S, T, rf, "put", q=q),
     }
