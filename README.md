@@ -22,6 +22,9 @@ more stable, realistic weights.
   to reduce estimation error (recommended; on by default).
 - **Interactive UI** — add tickers, set the risk-free rate, lookback period, and
   toggles; view metrics, allocations, the frontier, and the backtest chart.
+- **Options chain & Greeks** — pull a live option chain for any ticker and view
+  the full **Black–Scholes Greeks** (delta, gamma, vega, theta, rho) computed
+  per contract, since `yfinance` provides implied vol but not the Greeks.
 
 ---
 
@@ -41,9 +44,10 @@ more stable, realistic weights.
 | `backend.py` | Flask app, API endpoints, request handling, orchestration. |
 | `portfolio.py` | Optimization math: tangency weights (closed-form & constrained), efficient frontier. |
 | `main.py` | Data download (`yfinance`) and estimators, including Ledoit–Wolf shrinkage. |
+| `options.py` | Option chain retrieval and Black–Scholes pricing/Greeks. |
 | `backtest.py` | Cumulative portfolio-value backtest (accepts pre-fetched prices). |
 | `index.html` | Frontend UI and charts. |
-| `test_portfolio.py`, `test_api.py`, `test_estimators.py` | Pytest suite. |
+| `test_portfolio.py`, `test_api.py`, `test_estimators.py`, `test_options.py` | Pytest suite. |
 | `requirements.txt` / `requirements-dev.txt` | Runtime / dev dependencies. |
 | `Procfile` | Production start command for Render/Heroku-style hosts. |
 
@@ -104,6 +108,54 @@ Response (abridged):
 
 Same request shape; returns only the efficient frontier, tangency point, and
 per-asset risk/return points.
+
+### `POST /api/options/expirations`
+
+Request: `{ "ticker": "AAPL" }`
+
+Returns the underlying spot price and the list of available expiration dates:
+
+```json
+{
+  "ticker": "AAPL",
+  "underlying_price": 231.4,
+  "expirations": ["2026-08-07", "2026-08-14", "..."]
+}
+```
+
+### `POST /api/options/chain`
+
+Request:
+
+```json
+{ "ticker": "AAPL", "expiry": "2026-08-14", "rf": 0.04, "dividend_yield": 0.0 }
+```
+
+Returns the calls and puts for that expiry, each contract enriched with a
+Black–Scholes theoretical price (`bs_price`) and Greeks:
+
+```json
+{
+  "ticker": "AAPL",
+  "expiry": "2026-08-14",
+  "underlying_price": 231.4,
+  "years_to_expiry": 0.023,
+  "calls": [
+    {
+      "strike": 230.0, "lastPrice": 3.1, "bid": 3.0, "ask": 3.2,
+      "impliedVolatility": 0.28, "inTheMoney": true, "bs_price": 3.05,
+      "delta": 0.54, "gamma": 0.06, "vega": 0.12, "theta": -0.08, "rho": 0.01
+    }
+  ],
+  "puts": [ ... ]
+}
+```
+
+**Greek conventions:** delta and gamma are per **$1** move in the underlying,
+vega is per **1 percentage-point** change in implied volatility, theta is per
+**calendar day** of decay, and rho is per **1 percentage-point** change in the
+risk-free rate. Greeks are `null` for contracts with a degenerate/missing
+implied volatility (common on very illiquid strikes).
 
 ### `GET /api/health`
 
