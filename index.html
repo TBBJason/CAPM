@@ -374,6 +374,79 @@
             font-size: 1.1rem;
             color: var(--color-text);
         }
+
+        /* Options chain */
+        .options-controls {
+            display: grid;
+            grid-template-columns: 1.2fr 1.6fr 1fr auto;
+            gap: 14px;
+            align-items: end;
+        }
+
+        @media (max-width: 720px) {
+            .options-controls { grid-template-columns: 1fr; }
+            .options-controls button { max-width: none !important; width: 100%; }
+        }
+
+        .opt-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 22px;
+            background-color: #0f172a;
+            border-radius: 8px;
+            padding: 14px 18px;
+        }
+
+        .opt-summary div span {
+            display: block;
+            color: #94a3b8;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .opt-summary div strong {
+            font-size: 1.15rem;
+            color: var(--color-accent);
+        }
+
+        .opt-toggle {
+            display: flex;
+            gap: 8px;
+            margin: 18px 0 4px;
+        }
+
+        .opt-toggle button {
+            flex: 0 0 auto;
+            max-width: 140px;
+            padding: 8px 18px;
+            background-color: #0f172a;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .opt-toggle button.active {
+            background-color: rgba(56, 189, 248, 0.15);
+            color: var(--color-accent);
+            border-color: var(--color-accent);
+        }
+
+        .opt-table-wrap { overflow-x: auto; }
+
+        .opt-table { font-size: 0.85rem; }
+        .opt-table th, .opt-table td {
+            padding: 8px 10px;
+            text-align: right;
+            white-space: nowrap;
+        }
+        .opt-table th:first-child, .opt-table td:first-child { text-align: left; }
+        .opt-table tr.itm { background-color: rgba(56, 189, 248, 0.06); }
+        .opt-table tr.itm td:first-child { border-left: 3px solid var(--color-accent); }
+        .greek-pos { color: var(--color-success); }
+        .greek-neg { color: var(--color-error); }
     </style>
 </head>
 <body>
@@ -386,6 +459,7 @@
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('optimizer', this)">📊 Optimizer</button>
             <button class="tab-btn" onclick="switchTab('stockdata', this)">📈 Stock Data</button>
+            <button class="tab-btn" onclick="switchTab('options', this)">⚡ Options</button>
         </div>
 
         <div id="tab-optimizer" class="tab-content active">
@@ -531,6 +605,43 @@
                 </div>
             </div>
         </div><!-- /tab-stockdata -->
+
+        <div id="tab-options" class="tab-content">
+            <div class="card full-width">
+                <h2>Options Chain &amp; Greeks</h2>
+                <p class="input-hint" style="margin-bottom: 15px;">
+                    Live option chain from yfinance with Black-Scholes Greeks computed for each contract.
+                </p>
+                <div class="error" id="optError"></div>
+
+                <div class="options-controls">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="optTicker">Ticker</label>
+                        <input type="text" id="optTicker" placeholder="e.g., AAPL" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="optExpiry">Expiration</label>
+                        <select id="optExpiry" disabled>
+                            <option value="">Load a ticker first</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="optRf">Risk-Free Rate (%)</label>
+                        <input type="number" id="optRf" value="4.0" step="0.1" min="0">
+                    </div>
+                    <button class="btn-primary" style="max-width:200px;" onclick="loadOptionExpirations()" id="loadExpBtn">
+                        🔍 Load Options
+                    </button>
+                </div>
+
+                <div id="optSummary" style="margin-top:18px;"></div>
+                <div id="optChainContainer" style="margin-top:10px;">
+                    <p style="color:#94a3b8; text-align:center; padding:20px;">
+                        Enter a ticker and click "Load Options" to fetch the chain and Greeks.
+                    </p>
+                </div>
+            </div>
+        </div><!-- /tab-options -->
     </div>
 
     <script>
@@ -967,6 +1078,179 @@
             document.getElementById('fundamentalsContainer').innerHTML =
                 `<div class="fund-cards">${cards}</div>`;
         }
+
+        // ---- Options chain & Greeks ----
+        let optChainData = null;   // last fetched chain payload
+        let optSide = 'calls';     // which side is currently shown
+
+        function showOptError(msg) {
+            const el = document.getElementById('optError');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function clearOptError() {
+            document.getElementById('optError').style.display = 'none';
+        }
+
+        function fmtG(v, digits = 4) {
+            if (v === null || v === undefined || Number.isNaN(v)) return '—';
+            const n = Number(v);
+            const cls = n > 0 ? 'greek-pos' : (n < 0 ? 'greek-neg' : '');
+            return `<span class="${cls}">${n.toFixed(digits)}</span>`;
+        }
+
+        function fmtPlain(v, digits = 2) {
+            if (v === null || v === undefined || Number.isNaN(v)) return '—';
+            return Number(v).toFixed(digits);
+        }
+
+        async function loadOptionExpirations() {
+            clearOptError();
+            const ticker = document.getElementById('optTicker').value.toUpperCase().trim();
+            if (!ticker) {
+                showOptError('Please enter a ticker symbol');
+                return;
+            }
+
+            const btn = document.getElementById('loadExpBtn');
+            const expSelect = document.getElementById('optExpiry');
+            btn.disabled = true;
+            document.getElementById('optChainContainer').innerHTML =
+                '<div class="loading" style="display:block;"><div class="spinner"></div><p>Fetching option expirations...</p></div>';
+            document.getElementById('optSummary').innerHTML = '';
+
+            try {
+                const response = await fetch('/api/options/expirations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticker })
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || `HTTP Error: ${response.status}`);
+                }
+                const result = await response.json();
+
+                expSelect.innerHTML = result.expirations
+                    .map(e => `<option value="${e}">${e}</option>`).join('');
+                expSelect.disabled = false;
+
+                document.getElementById('optChainContainer').innerHTML =
+                    '<p style="color:#94a3b8; text-align:center; padding:20px;">Select an expiration to view the chain.</p>';
+
+                // Auto-load the first (nearest) expiry for convenience.
+                if (result.expirations.length) loadOptionChain();
+            } catch (err) {
+                document.getElementById('optChainContainer').innerHTML = '';
+                showOptError('Error: ' + err.message);
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function loadOptionChain() {
+            clearOptError();
+            const ticker = document.getElementById('optTicker').value.toUpperCase().trim();
+            const expiry = document.getElementById('optExpiry').value;
+            const rf = parseFloat(document.getElementById('optRf').value) / 100;
+            if (!ticker || !expiry) return;
+
+            document.getElementById('optChainContainer').innerHTML =
+                '<div class="loading" style="display:block;"><div class="spinner"></div><p>Fetching chain and computing Greeks...</p></div>';
+
+            try {
+                const response = await fetch('/api/options/chain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticker, expiry, rf })
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || `HTTP Error: ${response.status}`);
+                }
+                optChainData = await response.json();
+                renderOptionChain();
+            } catch (err) {
+                document.getElementById('optChainContainer').innerHTML = '';
+                showOptError('Error: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        function switchOptSide(side) {
+            optSide = side;
+            renderOptionChain();
+        }
+
+        function renderOptionChain() {
+            if (!optChainData) return;
+            const d = optChainData;
+            const daysToExp = Math.round(d.years_to_expiry * 365);
+
+            document.getElementById('optSummary').innerHTML = `
+                <div class="opt-summary">
+                    <div><span>Underlying</span><strong>${d.ticker}</strong></div>
+                    <div><span>Spot Price</span><strong>$${fmtPlain(d.underlying_price)}</strong></div>
+                    <div><span>Expiry</span><strong>${d.expiry}</strong></div>
+                    <div><span>Days to Expiry</span><strong>${daysToExp}</strong></div>
+                    <div><span>Risk-Free Rate</span><strong>${(d.risk_free_rate * 100).toFixed(2)}%</strong></div>
+                </div>
+                <div class="opt-toggle">
+                    <button class="${optSide === 'calls' ? 'active' : ''}" onclick="switchOptSide('calls')">Calls</button>
+                    <button class="${optSide === 'puts' ? 'active' : ''}" onclick="switchOptSide('puts')">Puts</button>
+                </div>`;
+
+            const rows = d[optSide];
+            if (!rows || !rows.length) {
+                document.getElementById('optChainContainer').innerHTML =
+                    '<p style="color:#94a3b8; text-align:center; padding:20px;">No contracts for this expiry.</p>';
+                return;
+            }
+
+            const body = rows.map(r => `
+                <tr class="${r.inTheMoney ? 'itm' : ''}">
+                    <td><strong>${fmtPlain(r.strike)}</strong></td>
+                    <td>${fmtPlain(r.lastPrice)}</td>
+                    <td>${fmtPlain(r.bid)}</td>
+                    <td>${fmtPlain(r.ask)}</td>
+                    <td>${r.impliedVolatility != null ? (r.impliedVolatility * 100).toFixed(1) + '%' : '—'}</td>
+                    <td>${fmtPlain(r.bs_price)}</td>
+                    <td>${fmtG(r.delta, 3)}</td>
+                    <td>${fmtG(r.gamma, 4)}</td>
+                    <td>${fmtG(r.vega, 4)}</td>
+                    <td>${fmtG(r.theta, 4)}</td>
+                    <td>${fmtG(r.rho, 4)}</td>
+                    <td>${r.volume != null ? r.volume : '—'}</td>
+                    <td>${r.openInterest != null ? r.openInterest : '—'}</td>
+                </tr>`).join('');
+
+            document.getElementById('optChainContainer').innerHTML = `
+                <div class="opt-table-wrap">
+                    <table class="opt-table">
+                        <thead>
+                            <tr>
+                                <th>Strike</th><th>Last</th><th>Bid</th><th>Ask</th><th>IV</th>
+                                <th>BS Price</th><th>Delta</th><th>Gamma</th><th>Vega</th>
+                                <th>Theta</th><th>Rho</th><th>Vol</th><th>OI</th>
+                            </tr>
+                        </thead>
+                        <tbody>${body}</tbody>
+                    </table>
+                </div>
+                <p class="input-hint" style="margin-top:12px;">
+                    Rows highlighted with a blue bar are in-the-money. Greeks: delta &amp; gamma per $1 move,
+                    vega per 1% IV change, theta per calendar day, rho per 1% rate change.
+                    BS Price is the Black-Scholes theoretical value using each contract's implied volatility.
+                </p>`;
+        }
+
+        // Re-fetch the chain whenever the expiry dropdown changes.
+        document.getElementById('optExpiry').addEventListener('change', loadOptionChain);
+        document.getElementById('optTicker').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') loadOptionExpirations();
+        });
     </script>
 </body>
 </html>

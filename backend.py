@@ -10,6 +10,7 @@ from portfolio import (
 from main import download_stock_data
 from main import ledoit_wolf_cov
 from main import fetch_fundamentals
+from options import fetch_expirations, fetch_option_chain
 from backtest import backtest
 import os
 from flask import send_from_directory
@@ -244,6 +245,69 @@ def fundamentals():
             raise RequestError(f"Maximum {MAX_TICKERS} tickers allowed")
 
         return jsonify({'fundamentals': fetch_fundamentals(tickers)})
+
+    except RequestError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+def _parse_single_ticker(data):
+    """Pull and validate a single ticker symbol from a request body."""
+    if not data:
+        raise RequestError("No JSON data provided")
+    ticker = str(data.get("ticker", "")).strip().upper()
+    if not ticker:
+        raise RequestError("Need a ticker symbol")
+    return ticker
+
+
+@app.route('/api/options/expirations', methods=['POST', 'GET'])
+def options_expirations():
+    """Return available option expiry dates and the spot price for a ticker."""
+    try:
+        if request.method == 'GET':
+            return jsonify({'status': 'ok', 'message': 'POST a ticker to this endpoint for option expirations'})
+
+        ticker = _parse_single_ticker(request.json)
+        result = fetch_expirations(ticker)
+        if not result.get("expirations"):
+            raise RequestError(f"No listed options found for {ticker}")
+        return jsonify(result)
+
+    except RequestError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/options/chain', methods=['POST', 'GET'])
+def options_chain():
+    """Return one expiry's option chain with Black-Scholes Greeks per contract."""
+    try:
+        if request.method == 'GET':
+            return jsonify({'status': 'ok', 'message': 'POST a ticker and expiry to this endpoint for an option chain'})
+
+        data = request.json
+        ticker = _parse_single_ticker(data)
+        expiry = str(data.get("expiry", "")).strip()
+        if not expiry:
+            raise RequestError("Need an expiry date (YYYY-MM-DD)")
+        rf = data.get("rf", 0.04)
+        dividend_yield = data.get("dividend_yield", 0.0)
+
+        try:
+            result = fetch_option_chain(ticker, expiry, rf=rf, q=dividend_yield)
+        except ValueError as e:
+            # Bad expiry / missing underlying price are client-fixable problems.
+            raise RequestError(str(e))
+        return jsonify(result)
 
     except RequestError as e:
         return jsonify({'error': str(e)}), 400
